@@ -1,0 +1,22 @@
+# Ignore environment files and local dev artifacts
+.env
+.env.*
+local.env
+*.secret
+
+# Node/Vercel / general
+node_modules/
+.vercel/
+.npm/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+
+# Editor
+.vscode/
+.idea/
