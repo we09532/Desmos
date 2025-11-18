@@ -985,5 +985,215 @@
 @keyframes dorp7{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}.jeWQ0{display:flex;flex-direction:row;align-items:center;border-radius:30px;padding:2px;height:26px;min-width:26px;position:absolute;background:#fff;box-shadow:inset 0 0 0 1px #cdd1dc;z-index:-1;right:0;bottom:0;}.jeWQ0 > :not(link) + *{margin-left:-1px}.jeWQ0.q44yz{border-radius:30px 30px 30px 0}.AyDlc{width:26px}.obQyN{display:none}.UP62D{padding:2px 2px 2px 0}
 .NRIwa{visibility:hidden;}.NRIwa .yEioX{font-weight:100}.NRIwa .qcX4v{font-style:italic;font-weight:100}.NRIwa .zVlKD{font-weight:200}.NRIwa .G5uFu{font-style:italic;font-weight:200}.NRIwa .ss65s{font-weight:300}.NRIwa .BAp6C{font-style:italic;font-weight:300}.NRIwa .TsKuT{font-weight:400}.NRIwa .zaGJf{font-style:italic;font-weight:400}.NRIwa .m1asa{font-weight:500}.NRIwa .OrxoJ{font-style:italic;font-weight:500}.NRIwa .DZkXF{font-weight:600}.NRIwa .nIB5t{font-style:italic;font-weight:600}.NRIwa .fcnMV{font-weight:700}.NRIwa .sxDQt{font-style:italic;font-weight:700}.NRIwa .PWSxT{font-weight:800}.NRIwa .NWlff{font-style:italic;font-weight:800}.NRIwa .CDNOZ{font-weight:900}.NRIwa .ZeE9p{font-style:italic;font-weight:900}
 .TACLT{z-index:0}
+</style>
+
+<!-- Desmos AI integration: lightweight client-side handler that sends '@' prompts to /api/gemini -->
+<script>
+(() => {
+  'use strict';
+  const GEMINI_PROXY = '/api/gemini';
+  const LOG_KEY = 'desmos_ai_logs';
+
+  function safeJSONParse(text){ try { return JSON.parse(text); } catch(e){ return null; } }
+
+  function readAILogs(){
+    try { return JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); } catch(e){ return []; }
+  }
+
+  function appendAILog(entry){
+    const logs = readAILogs();
+    logs.unshift(Object.assign({ts:new Date().toISOString()}, entry));
+    localStorage.setItem(LOG_KEY, JSON.stringify(logs.slice(0,200)));
+    updateLogPanel();
+  }
+
+  function createLogPanelIfNeeded(){
+    if (document.getElementById('desmos-ai-log-panel')) return;
+    const panel = document.createElement('div');
+    panel.id = 'desmos-ai-log-panel';
+    panel.style.position = 'fixed';
+    panel.style.right = '8px';
+    panel.style.bottom = '8px';
+    panel.style.zIndex = 2147483646;
+    panel.style.maxWidth = '320px';
+    panel.style.maxHeight = '40vh';
+    panel.style.overflow = 'auto';
+    panel.style.background = 'rgba(255,255,255,0.95)';
+    panel.style.border = '1px solid rgba(0,0,0,0.08)';
+    panel.style.padding = '8px';
+    panel.style.fontSize = '12px';
+    panel.style.boxShadow = '0 6px 18px rgba(0,0,0,0.14)';
+
+    const header = document.createElement('div');
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.alignItems = 'center';
+    header.style.marginBottom = '6px';
+    const title = document.createElement('strong'); title.innerText = 'Desmos AI';
+    const btns = document.createElement('div');
+    const clearBtn = document.createElement('button'); clearBtn.innerText = 'Clear';
+    const exportBtn = document.createElement('button'); exportBtn.innerText = 'Export';
+    [clearBtn, exportBtn].forEach(b=>{ b.style.marginLeft='6px'; b.style.fontSize='11px'; b.style.padding='2px 6px'; });
+    clearBtn.addEventListener('click', ()=>{ localStorage.removeItem(LOG_KEY); updateLogPanel(); });
+    exportBtn.addEventListener('click', ()=>{
+      const data = JSON.stringify(readAILogs(), null, 2);
+      const blob = new Blob([data], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'desmos_ai_logs.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    });
+    btns.appendChild(clearBtn); btns.appendChild(exportBtn);
+    header.appendChild(title); header.appendChild(btns);
+
+    const list = document.createElement('div'); list.id = 'desmos-ai-log-list'; list.style.fontSize='12px'; list.style.maxHeight='30vh'; list.style.overflow='auto';
+
+    panel.appendChild(header); panel.appendChild(list);
+    document.body.appendChild(panel);
+    updateLogPanel();
+  }
+
+  function updateLogPanel(){
+    const list = document.getElementById('desmos-ai-log-list');
+    if (!list) return;
+    const logs = readAILogs();
+    list.innerHTML = '';
+    logs.slice(0,50).forEach(l => {
+      const row = document.createElement('div');
+      row.style.borderTop = '1px solid rgba(0,0,0,0.04)';
+      row.style.padding = '6px 0';
+      const t = document.createElement('div'); t.style.fontSize='11px'; t.style.color='#555'; t.innerText = new Date(l.ts).toLocaleString();
+      const p = document.createElement('div'); p.style.whiteSpace='pre-wrap'; p.style.marginTop='4px'; p.innerText = 'Q: ' + (l.prompt || '');
+      const r = document.createElement('div'); r.style.whiteSpace='pre-wrap'; r.style.marginTop='4px'; r.style.color='#0b6'; r.innerText = 'A: ' + (l.reply || '');
+      row.appendChild(t); row.appendChild(p); row.appendChild(r);
+      list.appendChild(row);
+    });
+  }
+
+  // Find the currently focused expression text. Attempts several fallbacks so it works with MathQuill rendering.
+  function getActiveExpressionText(){
+    try{
+      const ae = document.activeElement;
+      if (!ae) return '';
+      const tag = (ae.tagName||'').toLowerCase();
+      if (tag === 'textarea' || tag === 'input') return ae.value || ae.textContent || '';
+      if (ae.isContentEditable) return ae.innerText || ae.textContent || '';
+      // fallbacks
+      const ta = document.querySelector('.dcg-expression-textarea textarea') || document.querySelector('textarea') || document.querySelector('.dcg-mq-editable');
+      if (ta) return ta.value || ta.innerText || ta.textContent || '';
+    }catch(e){ /* ignore */ }
+    return '';
+  }
+
+  function findDigit4Span(){
+    const spans = Array.from(document.querySelectorAll('span.dcg-mq-digit'));
+    for(const s of spans){
+      try{ if ((s.textContent||'').trim() === '4') return s; }catch(e){}
+    }
+    return null;
+  }
+
+  async function sendToGemini(prompt){
+    try{
+      const resp = await fetch(GEMINI_PROXY, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({prompt})
+      });
+      if (!resp.ok){
+        const txt = await resp.text();
+        return {error: `Proxy error ${resp.status}: ${txt}`};
+      }
+      const j = await resp.json();
+      // be flexible about where the assistant text lives
+      const reply = j?.reply || j?.assistant || j?.output || j?.text || (typeof j === 'string' ? j : '');
+      return {reply: reply || ''};
+    } catch(err){
+      return {error: String(err)};
+    }
+  }
+
+  async function handleAtPrompt(prompt, ctx){
+    createLogPanelIfNeeded();
+    appendAILog({prompt:'(pending) ' + prompt, reply:''});
+    const result = await sendToGemini(prompt);
+    let reply = '';
+    if (result.error){ reply = '[error] ' + result.error; }
+    else reply = result.reply || '';
+    // try to insert into the special span target first
+    const target = findDigit4Span();
+    if (target){
+      try{
+        target.textContent = reply;
+        // trigger input/event in case framework watches it
+        target.dispatchEvent(new Event('input', {bubbles:true}));
+        target.dispatchEvent(new Event('change', {bubbles:true}));
+      }catch(e){}
+    } else {
+      // fallback: insert into focused editable/textarea
+      const ae = document.activeElement;
+      if (ae && (ae.tagName === 'TEXTAREA' || ae.tagName === 'INPUT')){
+        ae.value = ae.value + '\n' + reply;
+        ae.dispatchEvent(new Event('input', {bubbles:true}));
+      } else if (ae && ae.isContentEditable){
+        ae.innerText = (ae.innerText || '') + '\n' + reply;
+        ae.dispatchEvent(new Event('input', {bubbles:true}));
+      } else {
+        // last resort: append a visible floating note
+        const note = document.createElement('div');
+        note.style.position='fixed'; note.style.left='8px'; note.style.bottom='8px'; note.style.background='rgba(0,0,0,0.8)'; note.style.color='#fff'; note.style.padding='8px'; note.style.zIndex=2147483645; note.style.maxWidth='60vw'; note.style.whiteSpace='pre-wrap';
+        note.textContent = reply;
+        document.body.appendChild(note);
+        setTimeout(()=>note.remove(), 12000);
+      }
+    }
+    appendAILog({prompt, reply});
+  }
+
+  // Main Enter/keyup handler - centralizes behavior so both keyboard and on-screen enter work.
+  function processEnterEvent(ev){
+    // only respond to Enter without Shift (user pressed Enter to submit)
+    if (ev.key !== 'Enter') return;
+    if (ev.shiftKey) return;
+    const text = getActiveExpressionText();
+    if (!text) return;
+    const trimmed = text.trim();
+    if (!trimmed.startsWith('@')) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const prompt = trimmed.replace(/^@+/, '').trim();
+    if (!prompt) return;
+    handleAtPrompt(prompt, {source:'enter'});
+  }
+
+  // Attach listeners on capture so we see it before the page handles it
+  document.addEventListener('keydown', processEnterEvent, true);
+
+  // Also attach to clicks on calculator on-screen Enter buttons if any appear as buttons with aria-label or text 'Enter'
+  document.addEventListener('click', (ev)=>{
+    try{
+      const el = ev.target;
+      if (!el) return;
+      const txt = (el.getAttribute && (el.getAttribute('aria-label')||el.textContent||'')).toLowerCase();
+      if (txt && txt.includes('enter')){
+        // small timeout to let page update focus/value, then process
+        setTimeout(()=>{
+          const text = getActiveExpressionText();
+          if (text && text.trim().startsWith('@')){
+            const prompt = text.trim().replace(/^@+/, '').trim();
+            if (prompt) handleAtPrompt(prompt, {source:'onscreen-enter'});
+          }
+        }, 30);
+      }
+    }catch(e){}
+  }, true);
+
+  // Lightweight initialization
+  setTimeout(()=>{
+    // create the panel only when needed; but ensure it's available after user interacts
+    // also expose a window helper to open logs manually
+    window.__desmos_ai_open_logs = createLogPanelIfNeeded;
+  }, 1000);
+
+})();
+</script>
 </body>
 </html>
