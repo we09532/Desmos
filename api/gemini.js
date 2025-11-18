@@ -28,7 +28,10 @@ export default async function handler(req, res) {
     // Attempt to call the Google Generative Language REST endpoint.
     // Note: API shapes and paths change; this implementation sends a simple "text prompt" wrapper
     // and returns the raw response. Adjust the request body if your API requires a different shape.
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(MODEL)}:generate`;
+  // Allow overriding the full upstream endpoint via GEN_ENDPOINT env var for flexibility
+  // (useful if the provider's path or model naming differs in your account).
+  const endpoint = process.env.GEN_ENDPOINT || `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(MODEL)}:generate`;
+  console.log('Proxy will call upstream endpoint:', endpoint, 'MODEL env:', process.env.GEN_MODEL || MODEL);
     const body = {
       prompt: { text: prompt }
     };
