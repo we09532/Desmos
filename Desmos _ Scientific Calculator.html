@@ -118,10 +118,7 @@
             // This is for local testing only. Use a server-side proxy in production.
             const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta';
             // IMPORTANT: Use a server-side environment variable (e.g., GEN_API_KEY in Vercel).
-            // The client should prefer the serverless proxy at `GEMINI_PROXY` and not hold
-            // any API key in the HTML. Keep this variable defined (null) so runtime checks
-            // work without throwing if a direct-call fallback is present.
-            const GEMINI_API_KEY = null;
+            // The client will NOT contain any API key and will call the serverless proxy at `GEMINI_PROXY`.
             const GEMINI_MODEL = 'gemini-mini';
             // When running behind a serverless proxy (recommended), set GEMINI_PROXY to '/api/gemini'
             // The proxy should accept POST { prompt } and return { reply }.
@@ -277,62 +274,26 @@
             }
 
             function sendToGemini(prompt) {
-              if (!GEMINI_API_KEY || GEMINI_API_KEY.indexOf('<PASTE') === 0) {
-                return Promise.reject(new Error('Gemini API key not set in the HTML.'));
-              }
-              // Basic visibility for debugging: record the outgoing request
-              console.log('sendToGemini()', { url: GEMINI_API_URL, model: GEMINI_MODEL, prompt: prompt });
+              // Proxy-only approach: always POST to the serverless proxy at GEMINI_PROXY.
+              console.log('sendToGemini() proxy-only', { proxy: GEMINI_PROXY, model: GEMINI_MODEL, prompt: prompt });
               appendAILog({ event: 'send-start', prompt: prompt, timestamp: new Date().toISOString(), model: GEMINI_MODEL });
 
-              // Try proxy first (recommended for GitHub/Vercel deployment). If proxy fails, fall back to direct API.
-              function callProxy() {
-                return fetch(GEMINI_PROXY, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ prompt: prompt })
-                }).then(function (res) {
-                  if (!res.ok) throw new Error('Proxy response not ok: ' + res.status + ' ' + res.statusText);
-                  return res.json();
-                }).then(function (json) {
-                  appendAILog({ event: 'proxy-success-raw', prompt: prompt, raw: json, timestamp: new Date().toISOString(), model: GEMINI_MODEL });
-                  if (json && typeof json.reply === 'string') return json.reply;
-                  if (json && typeof json.output === 'string') return json.output;
-                  // if proxy returned raw generativelanguage response, attempt to extract
-                  if (json && json.outputs && json.outputs[0] && json.outputs[0].content) return json.outputs[0].content;
-                  return JSON.stringify(json);
-                });
-              }
-
-              function callDirect() {
-                return fetch(GEMINI_API_URL + '/models/' + encodeURIComponent(GEMINI_MODEL) + ':generate', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + GEMINI_API_KEY
-                  },
-                  body: JSON.stringify({
-                    // simple prompt wrapper; your key/model may require a different shape
-                    prompt: { text: prompt }
-                  })
-                }).then(function (res) {
-                  if (!res.ok) throw new Error('Direct API response not ok: ' + res.status + ' ' + res.statusText);
-                  return res.json();
-                }).then(function (json) {
-                  appendAILog({ event: 'direct-success-raw', prompt: prompt, raw: json, timestamp: new Date().toISOString(), model: GEMINI_MODEL });
-                  if (json && typeof json.reply === 'string') return json.reply;
-                  if (json && json.candidates && json.candidates[0] && json.candidates[0].output) return json.candidates[0].output;
-                  if (json && json.outputs && json.outputs[0] && json.outputs[0].content) return json.outputs[0].content;
-                  return JSON.stringify(json);
-                });
-              }
-
-              // Try proxy, then fallback to direct if proxy fails.
-              return callProxy().catch(function (proxyErr) {
-                appendAILog({ event: 'proxy-failed', error: (proxyErr && proxyErr.message) || String(proxyErr), timestamp: new Date().toISOString() });
-                console.warn('Proxy failed, attempting direct API call', proxyErr);
-                return callDirect();
+              return fetch(GEMINI_PROXY, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: prompt })
+              }).then(function (res) {
+                if (!res.ok) throw new Error('Proxy response not ok: ' + res.status + ' ' + res.statusText);
+                return res.json();
+              }).then(function (json) {
+                appendAILog({ event: 'proxy-success-raw', prompt: prompt, raw: json, timestamp: new Date().toISOString(), model: GEMINI_MODEL });
+                if (json && typeof json.reply === 'string') return json.reply;
+                if (json && typeof json.output === 'string') return json.output;
+                if (json && json.outputs && json.outputs[0] && json.outputs[0].content) return json.outputs[0].content;
+                return JSON.stringify(json);
               }).catch(function (err) {
                 appendAILog({ event: 'send-error', prompt: prompt, error: (err && err.message) || String(err), timestamp: new Date().toISOString(), model: GEMINI_MODEL });
+                console.error('sendToGemini error:', err);
                 throw err;
               });
             }
