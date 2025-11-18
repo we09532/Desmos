@@ -42,14 +42,35 @@ export default async function handler(req, res) {
       body: JSON.stringify(body)
     });
 
-    const json = await r.json();
+    // Read response body as text first to avoid JSON.parse errors on empty/non-JSON bodies
+    const txt = await r.text();
+    let json = null;
+    try {
+      if (txt && txt.length) json = JSON.parse(txt);
+    } catch (parseErr) {
+      // keep json as null and continue; we'll include raw text in error/fallbacks
+      console.warn('Failed to parse upstream response as JSON:', parseErr && parseErr.message);
+    }
 
-    // Try to extract a useful reply if present
+    if (!r.ok) {
+      // Return a helpful error including status and any body text for debugging
+      console.error('Upstream API returned error', r.status, r.statusText, txt);
+      const bodyPreview = txt ? (txt.length > 2000 ? txt.slice(0, 2000) + '... (truncated)' : txt) : '';
+      return res.status(500).json({ error: `Upstream returned ${r.status} ${r.statusText}`, body: bodyPreview });
+    }
+
+    // Try to extract a useful reply if present in parsed JSON
     if (json && json.outputs && json.outputs[0] && json.outputs[0].content) {
       return res.status(200).json({ reply: json.outputs[0].content, raw: json });
     }
-    // fallback: return the whole response
-    return res.status(200).json({ reply: JSON.stringify(json), raw: json });
+
+    // If we parsed JSON but didn't find expected fields, return the parsed JSON
+    if (json) {
+      return res.status(200).json({ reply: JSON.stringify(json), raw: json });
+    }
+
+    // As a last resort, return the raw text body (could be plain text or an empty string)
+    return res.status(200).json({ reply: txt, rawText: txt });
   } catch (err) {
     console.error('Proxy error', err && err.stack || err);
     return res.status(500).json({ error: (err && err.message) || String(err) });

@@ -283,7 +283,14 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ prompt: prompt })
               }).then(function (res) {
-                if (!res.ok) throw new Error('Proxy response not ok: ' + res.status + ' ' + res.statusText);
+                if (!res.ok) {
+                  // Read response body (if any) to provide a clearer error message for diagnostics
+                  return res.text().then(function (text) {
+                    var bodyPreview = (text || '').trim();
+                    var msg = 'Proxy response not ok: ' + res.status + ' ' + res.statusText + (bodyPreview ? ' - ' + bodyPreview : '');
+                    throw new Error(msg);
+                  });
+                }
                 return res.json();
               }).then(function (json) {
                 appendAILog({ event: 'proxy-success-raw', prompt: prompt, raw: json, timestamp: new Date().toISOString(), model: GEMINI_MODEL });
