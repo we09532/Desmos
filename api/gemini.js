@@ -15,6 +15,13 @@ export default async function handler(req, res) {
 
   const API_KEY = process.env.GEN_API_KEY;
   const MODEL = process.env.GEN_MODEL || 'gemini-mini';
+  // Guard: common misconfiguration is accidentally placing the API key into GEN_MODEL.
+  // Google API keys often start with "AIza"; detect that and return a clear error.
+  const looksLikeApiKey = (s) => typeof s === 'string' && (/^AIza[A-Za-z0-9_-]{20,}$/.test(s) || (s.length > 30 && /[A-Za-z0-9_-]{20,}/.test(s)));
+  if (!API_KEY && looksLikeApiKey(MODEL)) {
+    console.error('Detected what looks like an API key in GEN_MODEL. Did you put your API key into GEN_MODEL by mistake?');
+    return res.status(400).json({ error: 'Detected API key in GEN_MODEL. Set your API key in the GEN_API_KEY environment variable and set GEN_MODEL to the model name (or set GEN_ENDPOINT to the full upstream URL).' });
+  }
   // Defensive check: reject obvious placeholder values so deploys don't accidentally use them.
   const PLACEHOLDER = '<PASTE_YOUR_API_KEY_HERE_OR_USE_PROXY>';
   if (!API_KEY || API_KEY.trim().length === 0) {
