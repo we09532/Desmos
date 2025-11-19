@@ -265,10 +265,10 @@
 
             function sendToGemini(prompt) {
               // Proxy-only approach: always POST to the serverless proxy at GEMINI_PROXY.
-              console.log('sendToGemini() proxy-only', { proxy: GEMINI_PROXY, model: GEMINI_MODEL, prompt: prompt });
-              appendAILog({ event: 'send-start', prompt: prompt, timestamp: new Date().toISOString(), model: GEMINI_MODEL });
+              console.log('sendToGemini() proxy-only', { proxy: (window.GEMINI_PROXY||'/api/gemini'), model: (window.GEMINI_MODEL||'gemini-mini'), prompt: prompt });
+              appendAILog({ event: 'send-start', prompt: prompt, timestamp: new Date().toISOString(), model: (window.GEMINI_MODEL||'gemini-mini') });
 
-              return fetch(GEMINI_PROXY, {
+              return fetch((window.GEMINI_PROXY||'/api/gemini'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ prompt: prompt })
@@ -283,13 +283,13 @@
                 }
                 return res.json();
               }).then(function (json) {
-                appendAILog({ event: 'proxy-success-raw', prompt: prompt, raw: json, timestamp: new Date().toISOString(), model: GEMINI_MODEL });
+                appendAILog({ event: 'proxy-success-raw', prompt: prompt, raw: json, timestamp: new Date().toISOString(), model: (window.GEMINI_MODEL||'gemini-mini') });
                 if (json && typeof json.reply === 'string') return json.reply;
                 if (json && typeof json.output === 'string') return json.output;
                 if (json && json.outputs && json.outputs[0] && json.outputs[0].content) return json.outputs[0].content;
                 return JSON.stringify(json);
               }).catch(function (err) {
-                appendAILog({ event: 'send-error', prompt: prompt, error: (err && err.message) || String(err), timestamp: new Date().toISOString(), model: GEMINI_MODEL });
+                appendAILog({ event: 'send-error', prompt: prompt, error: (err && err.message) || String(err), timestamp: new Date().toISOString(), model: (window.GEMINI_MODEL||'gemini-mini') });
                 console.error('sendToGemini error:', err);
                 throw err;
               });
@@ -339,7 +339,7 @@
                         }
 
                         const ts = new Date().toISOString();
-                        appendAILog({ event: 'prompt-detected', prompt: prompt, timestamp: ts, model: GEMINI_MODEL });
+                        appendAILog({ event: 'prompt-detected', prompt: prompt, timestamp: ts, model: (window.GEMINI_MODEL||'gemini-mini') });
                         // call the API
                         sendToGemini(prompt).then(function (reply) {
                           if (digitSpan) {
@@ -347,7 +347,7 @@
                           } else {
                             console.log('Gemini reply:', reply);
                           }
-                          appendAILog({ prompt: prompt, reply: reply, timestamp: ts, success: true, model: GEMINI_MODEL });
+                          appendAILog({ prompt: prompt, reply: reply, timestamp: ts, success: true, model: (window.GEMINI_MODEL||'gemini-mini') });
                         }).catch(function (err) {
                           console.error('Gemini error:', err);
                           if (digitSpan) {
@@ -355,7 +355,7 @@
                             digitSpan.style.color = 'red';
                             setTimeout(function () { digitSpan.style.color = ''; }, 1500);
                           }
-                          appendAILog({ prompt: prompt, error: (err && err.message) || String(err), timestamp: ts, success: false, model: GEMINI_MODEL });
+                          appendAILog({ prompt: prompt, error: (err && err.message) || String(err), timestamp: ts, success: false, model: (window.GEMINI_MODEL||'gemini-mini') });
                         });
                       }
                     }
