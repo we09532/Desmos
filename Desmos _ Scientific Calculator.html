@@ -114,16 +114,6 @@
         -->
         <script>
           (function () {
-            // WARNING: Embedding API keys in client-side code is insecure.
-            // This is for local testing only. Use a server-side proxy in production.
-            const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta';
-            // IMPORTANT: Use a server-side environment variable (e.g., GEN_API_KEY in Vercel).
-            // The client will NOT contain any API key and will call the serverless proxy at `GEMINI_PROXY`.
-            const GEMINI_MODEL = 'gemini-mini';
-            // When running behind a serverless proxy (recommended), set GEMINI_PROXY to '/api/gemini'
-            // The proxy should accept POST { prompt } and return { reply }.
-            const GEMINI_PROXY = '/api/gemini';
-
             function findPrimaryTextarea() {
               // Try multiple selectors because the saved HTML sometimes has different markup
               const selectors = [

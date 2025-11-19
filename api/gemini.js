@@ -15,8 +15,6 @@ export default async function handler(req, res) {
 
   const API_KEY = process.env.GEN_API_KEY;
   const MODEL = process.env.GEN_MODEL || 'gemini-mini';
-  // Guard: common misconfiguration is accidentally placing the API key into GEN_MODEL.
-  // Google API keys often start with "AIza"; detect that and return a clear error.
   const looksLikeApiKey = (s) => typeof s === 'string' && (/^AIza[A-Za-z0-9_-]{20,}$/.test(s) || (s.length > 30 && /[A-Za-z0-9_-]{20,}/.test(s)));
   if (!API_KEY && looksLikeApiKey(MODEL)) {
     console.error('Detected what looks like an API key in GEN_MODEL. Did you put your API key into GEN_MODEL by mistake?');
@@ -39,9 +37,11 @@ export default async function handler(req, res) {
   // (useful if the provider's path or model naming differs in your account).
   const endpoint = process.env.GEN_ENDPOINT || `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(MODEL)}:generate`;
   console.log('Proxy will call upstream endpoint:', endpoint, 'MODEL env:', process.env.GEN_MODEL || MODEL);
-    const body = {
-      prompt: { text: prompt }
-    };
+    // Support default prompt shape and newer Gemini generateContent shape
+    const usesGenerateContent = endpoint.includes(':generateContent');
+    const upstreamBody = usesGenerateContent
+      ? { contents: [{ parts: [{ text: prompt }] }] }
+      : { prompt: { text: prompt } };
 
     const r = await fetch(endpoint, {
       method: 'POST',
@@ -49,7 +49,7 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${API_KEY}`
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify(upstreamBody)
     });
 
     // Read response body as text first to avoid JSON.parse errors on empty/non-JSON bodies
@@ -69,17 +69,18 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: `Upstream returned ${r.status} ${r.statusText}`, body: bodyPreview });
     }
 
-    // Try to extract a useful reply if present in parsed JSON
+    // Prefer extract for generateContent shape (candidates[].content.parts[].text)
+    if (json && json.candidates && json.candidates[0] && json.candidates[0].content && json.candidates[0].content.parts && json.candidates[0].content.parts[0] && json.candidates[0].content.parts[0].text) {
+      return res.status(200).json({ reply: json.candidates[0].content.parts[0].text, raw: json });
+    }
+
+    // Try the older outputs shape
     if (json && json.outputs && json.outputs[0] && json.outputs[0].content) {
       return res.status(200).json({ reply: json.outputs[0].content, raw: json });
     }
 
-    // If we parsed JSON but didn't find expected fields, return the parsed JSON
-    if (json) {
-      return res.status(200).json({ reply: JSON.stringify(json), raw: json });
-    }
+    if (json) return res.status(200).json({ reply: JSON.stringify(json), raw: json });
 
-    // As a last resort, return the raw text body (could be plain text or an empty string)
     return res.status(200).json({ reply: txt, rawText: txt });
   } catch (err) {
     console.error('Proxy error', err && err.stack || err);

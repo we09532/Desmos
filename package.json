@@ -1,0 +1,15 @@
+{
+  "name": "desmos-ai-local",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "test-local": "node test-local.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "dotenv": "^16.0.3",
+    "node-fetch": "^3.3.1"
+  }
+}
